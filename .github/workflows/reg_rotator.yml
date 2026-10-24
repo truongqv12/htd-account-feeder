@@ -11,14 +11,11 @@ on:
     # Run every 30 minutes to keep pool constantly stocked with hundreds of fresh accounts
     - cron: '*/30 * * * *'
 
-concurrency:
-  group: reg-rotator-group
-  cancel-in-progress: false
-
 jobs:
   reg-burst:
     name: IP Burst Worker #${{ matrix.slot }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
