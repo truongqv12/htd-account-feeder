@@ -1,0 +1,13 @@
+name: Test 1 Nick S83
+on:
+  workflow_dispatch:
+
+jobs:
+  test_s83:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install websockets
+        run: pip install websockets
+      - name: Run 1 Nick Test on S83
+        run: python -u scripts/test_one_nick_s83.py
