@@ -1,0 +1,48 @@
+name: Cloud IP-Rotator Account Generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      count_per_job:
+        description: 'Number of accounts per worker job'
+        required: false
+        default: '5'
+  schedule:
+    # Run every 30 minutes to keep pool constantly stocked with hundreds of fresh accounts
+    - cron: '*/30 * * * *'
+
+concurrency:
+  group: reg-rotator-group
+  cancel-in-progress: false
+
+jobs:
+  reg-burst:
+    name: IP Burst Worker #${{ matrix.slot }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install playwright
+          playwright install chromium --with-deps
+
+      - name: Run Playwright Account Generator
+        env:
+          HUB_URL: ${{ secrets.HUB_URL }}
+          HUB_SECRET: ${{ secrets.HUB_SECRET }}
+        run: |
+          python scripts/github_reg_worker.py \
+            --worker-id ${{ matrix.slot }} \
+            --count ${{ github.event.inputs.count_per_job || 5 }} \
+            --pace 2.0
