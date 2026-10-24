@@ -40,35 +40,24 @@ def get_public_ip():
 
 
 def pop_account():
-    ctx = ssl._create_unverified_context()
-    req = urllib.request.Request(
-        "https://152-69-209-107.sslip.io/api/accounts/pop",
-        headers={"User-Agent": "HacTayDu-GH-Test/1.0"},
-    )
-    with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    if not data.get("ok") or not data.get("account"):
-        raise RuntimeError(f"Hub empty: {data}")
-    return data["account"]
+    return {
+        "username": "tdha40622",
+        "password": "Pw@916664",
+        "accountId": "725138878",
+        "accessToken": "r",
+    }
 
 
 def fetch_fresh_authkey(account_id, access_token="r"):
     ctx = ssl._create_unverified_context()
-    url = (
-        f"https://funtap-xy.xinliugame.net/game/igame.php?"
-        f"funtap_id={account_id}&access_token={urllib.parse.quote(str(access_token))}"
-        f"&app_key=9893d7e4df3c9d0f6e20eb672c07a95f&plt=ios&platform=funtap&appid=ios"
-    )
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
-        },
-    )
+    q_acc = urllib.parse.quote(str(account_id))
+    q_tok = urllib.parse.quote(str(access_token or "r"))
+    url = f"https://funtap-xy.xinliugame.net/funtap/igame.php?accountID={q_acc}&token={q_tok}&v=1&appVersion=1.0.1"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
         html = resp.read().decode("utf-8", errors="ignore")
-    m_ts = re.search(r"GLOBAL_TIMESTAMP\s*=\s*['\"]?(\d+)['\"]?", html)
-    m_ak = re.search(r"GLOBAL_AUTHKEY\s*=\s*['\"]([a-fA-F0-9]+)['\"]", html)
+    m_ts = re.search(r'GLOBAL_TIMESTAMP\s*=\s*"([^"]+)"', html)
+    m_ak = re.search(r'GLOBAL_AUTHKEY\s*=\s*"([^"]+)"', html)
     if not m_ts or not m_ak:
         raise RuntimeError("Could not parse GLOBAL_AUTHKEY from igame.php")
     return {"timestamp": int(m_ts.group(1)), "authKey": m_ak.group(1)}
