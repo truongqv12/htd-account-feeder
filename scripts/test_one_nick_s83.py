@@ -40,12 +40,16 @@ def get_public_ip():
 
 
 def pop_account():
-    return {
-        "username": "tdha40622",
-        "password": "Pw@916664",
-        "accountId": "725138878",
-        "accessToken": "r",
-    }
+    ctx = ssl._create_unverified_context()
+    req = urllib.request.Request(
+        "https://152-69-209-107.sslip.io/api/accounts/pop",
+        headers={"User-Agent": "HacTayDu-GH-Test/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    if not data.get("ok") or not data.get("account"):
+        raise RuntimeError(f"Hub empty: {data}")
+    return data["account"]
 
 
 def fetch_fresh_authkey(account_id, access_token="r"):
@@ -137,7 +141,9 @@ async def main():
     heroes_5star = []
     seen_bag_list = False
     cdk_ev = asyncio.Event()
+    mail_ev = asyncio.Event()
     mail_count = 0
+    current_attempt = 0
 
     t_total = time.time()
     async with websockets.connect(ws_url, ssl=ctx, open_timeout=12, ping_interval=None, ping_timeout=None) as ws:
@@ -151,10 +157,13 @@ async def main():
                     cdk_ev.set()
                 elif mid == 10 and sz >= 10:
                     msg = resp[14:].decode("utf-8", errors="replace")
-                    if msg.startswith("已达到领取上限"):
+                    # On attempt >= 1 (retry of same code), 已达到领取上限 confirms the earlier attempt succeeded!
+                    # On attempt == 0, ignore trailing 已达到领取上限 from previous code's duplicate retry.
+                    if msg.startswith("已达到领取上限") and current_attempt >= 1:
                         cdk_ev.set()
                 elif mid == 69 and sz > 3:
                     mail_count = struct.unpack(">H", resp[4:6])[0]
+                    mail_ev.set()
                 elif mid == 38:
                     if not seen_bag_list:
                         seen_bag_list = True
@@ -177,24 +186,38 @@ async def main():
             await asyncio.sleep(0.25)
         await ws.send(_pkt_msg(91, struct.pack(">i", 1)))
         await ws.send(_pkt_msg(598, struct.pack(">i", 1)))
-        await asyncio.sleep(0.45)
+        # Pre-warm MailManager on S83 before first CDK!
+        await ws.send(_pkt_msg(64, b"\x01"))
+        try:
+            await asyncio.wait_for(mail_ev.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
+            pass
+        await asyncio.sleep(0.30)
 
         confirmed = []
         failed = []
         for idx, code in enumerate(REROLL_GIFTCODES, 1):
-            cdk_ev.clear()
             t0 = time.time()
-            await ws.send(_pkt_msg(143, _pkt_str(code)))
-            try:
-                await asyncio.wait_for(cdk_ev.wait(), timeout=3.8)
-                confirmed.append(code)
-                print(f"  [{idx:02d}/28] OK  {code:<16} ({time.time()-t0:.2f}s)", flush=True)
-            except asyncio.TimeoutError:
+            ok = False
+            for attempt in range(7):
+                current_attempt = attempt
+                cdk_ev.clear()
+                await ws.send(_pkt_msg(143, _pkt_str(code)))
+                try:
+                    await asyncio.wait_for(cdk_ev.wait(), timeout=1.8)
+                    confirmed.append(code)
+                    ok = True
+                    print(f"  [{idx:02d}/28] OK  {code:<16} ({time.time()-t0:.2f}s, try={attempt+1})", flush=True)
+                    break
+                except asyncio.TimeoutError:
+                    await asyncio.sleep(0.15)
+            if not ok:
                 failed.append(code)
-                print(f"  [{idx:02d}/28] ERR {code:<16} (TIMEOUT 3.8s)", flush=True)
-            await asyncio.sleep(0.55)
+                print(f"  [{idx:02d}/28] ERR {code:<16} (failed after 7 tries)", flush=True)
+            await asyncio.sleep(0.45)
 
         await asyncio.sleep(1.20)
+        mail_ev.clear()
         await ws.send(_pkt_msg(64, b"\x01"))
         await ws.send(_pkt_msg(64, b"\x02"))
         await ws.send(_pkt_msg(61))
