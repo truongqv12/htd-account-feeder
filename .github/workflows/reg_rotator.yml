@@ -15,7 +15,7 @@ jobs:
   reg-burst:
     name: IP Burst Worker #${{ matrix.slot }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +39,7 @@ jobs:
           HUB_URL: ${{ secrets.HUB_URL }}
           HUB_SECRET: ${{ secrets.HUB_SECRET }}
         run: |
-          python scripts/github_reg_worker.py \
+          python -u scripts/github_reg_worker.py \
             --worker-id ${{ matrix.slot }} \
             --count ${{ github.event.inputs.count_per_job || 5 }} \
-            --pace 2.0
+            --pace 1.2
