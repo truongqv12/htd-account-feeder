@@ -14,7 +14,7 @@ import urllib.request
 import urllib.error
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", write_through=True)
 
 from playwright.sync_api import sync_playwright
 
@@ -186,17 +186,27 @@ def main():
         page = context.new_page()
         page.route("**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf,otf}", lambda route: route.abort())
 
+        consec_fails = 0
         for seq in range(1, args.count + 1):
             try:
                 acc = register_one_account(page, args.worker_id, seq)
                 if acc:
+                    consec_fails = 0
                     created_accounts.append(acc)
                     # Stream micro-batches of 3 accounts directly into Hub so queue never waits
                     if len(created_accounts) >= 3:
                         push_accounts_to_hub(args.hub_url, args.secret, created_accounts)
                         created_accounts.clear()
+                else:
+                    consec_fails += 1
+                    if consec_fails >= 3:
+                        print(f"[{args.worker_id}] ⚠️ IP reached Funtap limit (3 consecutive fails at #{seq}), exiting early to rotate fresh Azure IP!")
+                        break
             except Exception as e:
                 print(f"[{args.worker_id}#{seq}] Loop exception: {e}")
+                consec_fails += 1
+                if consec_fails >= 3:
+                    break
             if seq < args.count:
                 time.sleep(args.pace)
 
