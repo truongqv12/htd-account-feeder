@@ -6,10 +6,14 @@ on:
       count_per_job:
         description: 'Number of accounts per worker job'
         required: false
-        default: '5'
+        default: '20'
   schedule:
-    # Run every 30 minutes to keep pool constantly stocked with hundreds of fresh accounts
-    - cron: '*/30 * * * *'
+    # Run every 5 minutes 24/7 to continuously stockpile fresh accounts even when PC is off
+    - cron: '*/5 * * * *'
+
+concurrency:
+  group: reg-rotator-stockpile
+  cancel-in-progress: false
 
 jobs:
   reg-burst:
@@ -41,5 +45,5 @@ jobs:
         run: |
           python -u scripts/github_reg_worker.py \
             --worker-id ${{ matrix.slot }} \
-            --count ${{ github.event.inputs.count_per_job || 5 }} \
+            --count ${{ github.event.inputs.count_per_job || 20 }} \
             --pace 1.2
